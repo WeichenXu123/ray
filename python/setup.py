@@ -272,6 +272,8 @@ if setup_spec.type == SetupType.RAY:
         "scikit-image",
         "pyyaml",
         "scipy",
+        "typer",
+        "rich",
     ]
 
     setup_spec.extras["train"] = setup_spec.extras["tune"]
