@@ -8,6 +8,7 @@ import uuid
 from packaging.version import Version
 from typing import Optional, Dict
 
+import ray
 from ray.util.annotations import PublicAPI
 from ray._private.storage import _load_class
 
@@ -101,8 +102,12 @@ class RayClusterOnSpark:
                 "The ray cluster has been shut down or it failed to start."
             )
         if self.ray_context is None:
-            # connect to the ray cluster.
-            self.ray_context = ray.init(address=self.address)
+            try:
+                # connect to the ray cluster.
+                self.ray_context = ray.init(address=self.address)
+            except Exception:
+                self.shutdown()
+                raise
 
             last_alive_worker_count = 0
             last_progress_move_time = time.time()
@@ -716,7 +721,7 @@ def init_ray_cluster(
     ray_temp_root_dir: Optional[str] = None,
     safe_mode: Optional[bool] = False,
     collect_log_to_path: Optional[str] = None,
-) -> None:
+) -> str:
     """
     Initialize a ray cluster on the spark cluster by starting a ray head node in the
     spark application's driver side node.
@@ -763,13 +768,25 @@ def init_ray_cluster(
             recommend you to specify a local path starts with '/dbfs/', because the
             path mounts with a centralized storage device and stored data is persisted
             after databricks spark cluster terminated.
+
+    Returns:
+        The address of the initiated Ray cluster on spark.
     """
     global _active_ray_cluster
+
     if _active_ray_cluster is not None:
         raise RuntimeError(
-            "Current active ray cluster on spark haven't shut down. You cannot create "
-            "a new ray cluster."
+            "Current active ray cluster on spark haven't shut down. Please call "
+            "`ray.util.spark.shutdown_ray_cluster()` before initiating a new Ray "
+            "cluster on spark."
         )
+
+    if ray.is_initialized():
+        raise RuntimeError(
+            "Current python process already initialized Ray, Please shut down it "
+            "by `ray.shutdown()` before initiating a Ray cluster on spark."
+        )
+
     cluster = _init_ray_cluster(
         num_worker_nodes=num_worker_nodes,
         object_store_memory_per_node=object_store_memory_per_node,
@@ -784,6 +801,7 @@ def init_ray_cluster(
     # If connect cluster successfully, set global _active_ray_cluster to be the started
     # cluster.
     _active_ray_cluster = cluster
+    return cluster.address
 
 
 @PublicAPI(stability="alpha")
