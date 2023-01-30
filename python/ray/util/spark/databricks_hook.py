@@ -138,6 +138,7 @@ class DefaultDatabricksRayOnSparkStartHook(RayOnSparkStartHook):
         def auto_shutdown_watcher():
             auto_shutdown_timeout_millis = auto_shutdown_timeout_minutes * 60 * 1000
             while True:
+                print("DBG: in auto_shutdown_watcher loop.")
                 if ray_cluster_handler.is_shutdown:
                     # The cluster is shut down. The watcher thread exits.
                     return
@@ -150,6 +151,7 @@ class DefaultDatabricksRayOnSparkStartHook(RayOnSparkStartHook):
                     with cluster_init._active_ray_cluster_rwlock:
                         if ray_cluster_handler is cluster_init._active_ray_cluster:
                             cluster_init.shutdown_ray_cluster()
+                            print("DBG: auto_shutdown_watcher shut down cluster.")
                     return
 
                 time.sleep(DATABRICKS_AUTO_SHUTDOWN_POLL_INTERVAL_SECONDS)
