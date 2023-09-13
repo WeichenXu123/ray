@@ -224,13 +224,7 @@ class RayClusterOnSpark:
                     "An Error occurred during shutdown of ray head node: " f"{repr(e)}"
                 )
             finally:
-                _try_clean_temp_dir_at_exit(
-                    process=self.head_proc,
-                    collect_log_to_path=os.environ.get(
-                        RAY_ON_SPARK_COLLECT_LOG_TO_PATH
-                    ),
-                    temp_dir=self.temp_dir,
-                )
+                pass
             self.is_shutdown = True
 
     def to_dict(self):
