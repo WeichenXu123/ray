@@ -1277,6 +1277,9 @@ def _start_ray_worker_nodes(
 
         context = TaskContext.get()
 
+        import os
+        os.environ["SPARK_UDF_PARTITION_ID"] = str(context.partitionId())
+
         (
             worker_port_range_begin,
             worker_port_range_end,
