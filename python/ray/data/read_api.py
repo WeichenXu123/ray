@@ -2351,23 +2351,62 @@ def from_arrow_refs(
 
 @PublicAPI
 def from_spark(
-    df: "pyspark.sql.DataFrame", *, parallelism: Optional[int] = None
+    df: "pyspark.sql.DataFrame", *, parallelism: Optional[int] = None,
 ) -> MaterializedDataset:
     """Create a :class:`~ray.data.Dataset` from a
     `Spark DataFrame <https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.DataFrame.html>`_.
 
     Args:
-        df: A `Spark DataFrame`_, which must be created by RayDP (Spark-on-Ray).
+        df: Any `Spark DataFrame` if you run Ray application with Ray on spark,
+            or a `Spark DataFrame`_ which must be created by RayDP (Spark-on-Ray).
         parallelism: The amount of parallelism to use for the dataset. If
             not provided, the parallelism is equal to the number of partitions of
             the original Spark DataFrame.
 
     Returns:
-        A :class:`~ray.data.MaterializedDataset` holding rows read from the DataFrame.
+        If you run Ray application with Ray on spark, it returns a ray dataset, the
+        data is cached in spark distributed cache system, but is not cached
+        in ray object store, otherwise it returns
+        a :class:`~ray.data.MaterializedDataset` holding rows read from the DataFrame.
     """  # noqa: E501
-    import raydp
 
-    return raydp.spark.spark_dataframe_to_ray_dataset(df, parallelism)
+    from pyspark.sql import SparkSession
+
+    if SparkSession.getActiveSession() is not None:
+        from ray.data.datasource.spark_datasource import SparkDatasource
+        from ray.util.spark.databricks_hook import get_databricks_function
+        # Ray on spark
+        datasource = SparkDatasource(df, -1)
+        if parallelism is None:
+            parallelism = datasource.num_chunks
+        dataset = read_datasource(
+            datasource=datasource,
+            parallelism=parallelism,
+        )
+
+        def patched_dataset_del(obj):
+            super(obj.__class__, obj).__del__()
+            datasource.dispose_spark_cache()
+
+        dataset.__del__ = patched_dataset_del
+
+        try:
+            get_databricks_function("displayHTML")(
+                "<b style='background-color:yellow;'>The Ray dataset converted from "
+                "spark dataset puts cached data in spark distributed cache system, "
+                "when you don't use this Ray dataset instance any more, please "
+                "remember to call `del this_ray_dataset` in order to release the "
+                "cached data in spark side.</b>"
+            )
+        except Exception:
+            pass
+
+
+        return dataset
+    else:
+        import raydp
+
+        return raydp.spark.spark_dataframe_to_ray_dataset(df, parallelism)
 
 
 @PublicAPI
