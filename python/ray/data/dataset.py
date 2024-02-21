@@ -5088,6 +5088,13 @@ class Dataset:
         except TypeError:
             pass
 
+        if cleanup_hook := getattr(self, "_cleanup_hook"):
+            # SparkDatasource installs _cleanup_hook for generated dataset.
+            try:
+                cleanup_hook()
+            except Exception:
+                pass
+
 
 @PublicAPI
 class MaterializedDataset(Dataset, Generic[T]):
